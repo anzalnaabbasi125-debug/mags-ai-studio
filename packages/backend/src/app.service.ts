@@ -1,20 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { RolesService } from './roles/roles.service';
 
 @Injectable()
-export class AppService {
-  getHealth() {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-    };
+export class AppService implements OnModuleInit {
+  constructor(private rolesService: RolesService) {}
+
+  async onModuleInit() {
+    // Seed default roles on startup
+    await this.rolesService.seedDefaultRoles();
   }
 
   getInfo() {
     return {
       name: 'MAGS AI Studio API',
       version: '1.0.0',
-      environment: process.env.NODE_ENV,
-      description: 'AI SaaS platform like Cursor / Claude / OpenAI assistant',
+      description: 'AI SaaS Platform',
+      status: 'running',
+      timestamp: new Date().toISOString(),
     };
   }
 }

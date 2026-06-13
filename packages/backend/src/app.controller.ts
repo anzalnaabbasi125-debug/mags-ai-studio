@@ -3,15 +3,18 @@ import { AppService } from './app.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
-
-  @Get('/health')
-  getHealth() {
-    return this.appService.getHealth();
-  }
+  constructor(private appService: AppService) {}
 
   @Get()
   getInfo() {
     return this.appService.getInfo();
+  }
+
+  @Get('health')
+  health() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    };
   }
 }

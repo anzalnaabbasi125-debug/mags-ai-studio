@@ -1,4 +1,5 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
+import { tokenManager } from './token-manager';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -13,52 +14,66 @@ class ApiClient {
       },
     });
 
+    // Request interceptor
     this.client.interceptors.request.use((config) => {
-      if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
+      const token = tokenManager.getAccessToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
     });
 
+    // Response interceptor
     this.client.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
-        if (error.response?.status === 401 && typeof window !== 'undefined') {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('user');
-          window.location.href = '/auth/login';
+      async (error: AxiosError) => {
+        const originalRequest = error.config as any;
+
+        // If 401 and not already retrying, try to refresh token
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+
+          try {
+            const refreshToken = tokenManager.getRefreshToken();
+            if (!refreshToken) {
+              throw new Error('No refresh token available');
+            }
+
+            const response = await axios.post(`${API_URL}/auth/refresh`, {
+              refreshToken,
+            });
+
+            const { accessToken, refreshToken: newRefreshToken } = response.data;
+            tokenManager.setTokens(accessToken, newRefreshToken);
+
+            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            return this.client(originalRequest);
+          } catch (refreshError) {
+            tokenManager.clearTokens();
+            window.location.href = '/login';
+            return Promise.reject(refreshError);
+          }
         }
+
         return Promise.reject(error);
       },
     );
   }
 
-  async get<T>(url: string) {
-    const response = await this.client.get<T>(url);
-    return response.data;
+  get<T = any>(url: string, config?: AxiosRequestConfig) {
+    return this.client.get<T>(url, config);
   }
 
-  async post<T>(url: string, data?: unknown) {
-    const response = await this.client.post<T>(url, data);
-    return response.data;
+  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig) {
+    return this.client.post<T>(url, data, config);
   }
 
-  async put<T>(url: string, data?: unknown) {
-    const response = await this.client.put<T>(url, data);
-    return response.data;
+  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig) {
+    return this.client.patch<T>(url, data, config);
   }
 
-  async delete<T>(url: string) {
-    const response = await this.client.delete<T>(url);
-    return response.data;
-  }
-
-  async patch<T>(url: string, data?: unknown) {
-    const response = await this.client.patch<T>(url, data);
-    return response.data;
+  delete<T = any>(url: string, config?: AxiosRequestConfig) {
+    return this.client.delete<T>(url, config);
   }
 }
 
